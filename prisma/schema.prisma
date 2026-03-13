@@ -1,24 +1,30 @@
 datasource db {
   provider = "postgresql"
-
 }
- 
+
 generator client {
   provider = "prisma-client-js"
-  output   = "./generated/prisma"
 }
 
 // --- 1. USER & PERSONALIZATION ---
 
 model User {
-  id            String         @id @default(cuid())
-  email         String         @unique
-  gender        Gender         // Specifically MALE or FEMALE
-  interests     String[]       // Student tags for AI context
+  id         String          @id @default(cuid())
+  email      String          @unique
+  gender     Gender
+  age        Int
+  createdAt  DateTime        @default(now())
   
-  settings      UserSettings?
-  selections    UserSelection[]
-  createdAt     DateTime       @default(now())
+  // Link to a Tag (Many users can have one Tag)
+  tagId      String?
+  tag        Tag?            @relation(fields: [tagId], references: [id])
+  
+  settings   UserSettings?
+  selections UserSelection[]
+  
+  // Personalized Collections
+  userAnalogies UserAnalogy[]
+  userKeywords  UserKeyword[]
 }
 
 enum Gender {
@@ -30,81 +36,74 @@ model UserSettings {
   id        String   @id @default(cuid())
   userId    String   @unique
   user      User     @relation(fields: [userId], references: [id])
-
-  // Stores UI colors (analogyBox, keywordBox), AI API keys, etc.
-  config    Json     @default("{\"theme\": \"light\", \"colors\": {}}") 
-
+  
+  // UI preferences & AI config
+  config    Json     @default("{\"theme\": \"light\", \"colors\": {}}")
   updatedAt DateTime @updatedAt
 }
 
 // --- 2. CONTENT HIERARCHY (The Tree) ---
 
 model Unit {
-  id          String    @id @default(cuid())
-  title       String
-  summary     UnitSummary?
-  lessons     Lesson[]
+  id        String       @id @default(cuid())
+  title     String
+  summary   UnitSummary?
+  lessons   Lesson[]
   
-  // High-level connections
-  analogies   MasterAnalogy[]
-  keywords    MasterKeyword[]
-  examples    Example[]
-  exercises   Exercise[]
-  tagLinks    TagRelator[]
+  analogies MasterAnalogy[]
+  keywords  MasterKeyword[]
+  examples  Example[]
+  exercises Exercise[]
+  tagLinks  TagRelator[]
 }
 
 model Lesson {
-  id          String    @id @default(cuid())
-  title       String
-  depth       Int       @default(0) // For indentation logic
-  order       Int       // Sequence in the sidebar
+  id        String   @id @default(cuid())
+  title     String
+  depth     Int      @default(0)
+  order     Int      
 
-  // Recursive Tree Structure
-  parentId    String?
-  parent      Lesson?   @relation("SubLessons", fields: [parentId], references: [id])
-  children    Lesson[]  @relation("SubLessons")
+  parentId  String?
+  parent    Lesson?  @relation("SubLessons", fields: [parentId], references: [id])
+  children  Lesson[] @relation("SubLessons")
   
-  unitId      String?
-  unit        Unit?     @relation(fields: [unitId], references: [id])
+  unitId    String?
+  unit      Unit?    @relation(fields: [unitId], references: [id])
   
-  paragraphs  MasterParagraph[]
-  analogies   MasterAnalogy[]
-  keywords    MasterKeyword[]
-  examples    Example[]
-  exercises   Exercise[]
-  tagLinks    TagRelator[]
+  paragraphs MasterParagraph[]
+  analogies  MasterAnalogy[]
+  keywords   MasterKeyword[]
+  examples   Example[]
+  exercises  Exercise[]
+  tagLinks   TagRelator[]
 }
 
 model MasterParagraph {
-  id          String   @id @default(cuid())
-  content     String   @db.Text
-  order       Int      // Position within the lesson
-  isDefault   Boolean  @default(true)
+  id        String   @id @default(cuid())
+  content   String   @db.Text
+  order     Int
+  isDefault Boolean  @default(true)
   
-  lessonId    String
-  lesson      Lesson   @relation(fields: [lessonId], references: [id])
+  lessonId  String
+  lesson    Lesson   @relation(fields: [lessonId], references: [id])
   
-  // Layout Modules
-  boxes       Box[]
-  
-  // Relations
-  analogies   MasterAnalogy[]
-  examples    Example[]
-  tagLinks    TagRelator[]
-  selections  UserSelection[]
+  boxes         Box[]
+  analogies     MasterAnalogy[]
+  userAnalogies UserAnalogy[]
+  examples      Example[]
+  tagLinks      TagRelator[]
+  selections    UserSelection[]
 }
 
 // --- 3. DYNAMIC LAYOUT & STATIC TOOLS ---
 
 model Box {
-  id          String   @id @default(cuid())
+  id          String    @id @default(cuid())
   title       String?
-  logo        String?  // Icon name (e.g., "warning", "info")
-  content     Json     // Stores text or interactive object data
-  
+  logo        String?   
+  content     String    
   paragraphId String
   paragraph   MasterParagraph @relation(fields: [paragraphId], references: [id])
-  
   placement   Placement @default(AFTER)
   order       Int       @default(0)
 }
@@ -124,12 +123,13 @@ model MasterKeyword {
   lessonId   String?
   lesson     Lesson?  @relation(fields: [lessonId], references: [id])
   
-  tagLinks   TagRelator[]
+  tagLinks      TagRelator[]
+  userKeywords  UserKeyword[]
 }
 
 model Example {
   id          String   @id @default(cuid())
-  question    Json     // Supports LaTeX/Math
+  question    Json     
   answer      String   @db.Text
   
   unitId      String?
@@ -141,46 +141,43 @@ model Example {
 }
 
 model Exercise {
-  id          String   @id @default(cuid())
-  type        String   // "REVIEW", "QUIZ", "LAB"
-  data        Json     // Multi-choice, True/False, etc.
-  
-  unitId      String?
-  unit        Unit?    @relation(fields: [unitId], references: [id])
-  lessonId    String?
-  lesson      Lesson?  @relation(fields: [lessonId], references: [id])
+  id        String   @id @default(cuid())
+  type      String   
+  data      Json     
+  unitId    String?
+  unit      Unit?    @relation(fields: [unitId], references: [id])
+  lessonId  String?
+  lesson    Lesson?  @relation(fields: [lessonId], references: [id])
 }
 
 model UnitSummary {
-  id        String   @id @default(cuid())
-  content   String   @db.Text
-  unitId    String   @unique
-  unit      Unit     @relation(fields: [unitId], references: [id])
+  id        String @id @default(cuid())
+  content   String @db.Text
+  unitId    String @unique
+  unit      Unit   @relation(fields: [unitId], references: [id])
 }
 
-// --- 4. TAGGING & ANALYTICS (The Brain) ---
+// --- 4. TAGGING & AI COLLECTIONS (The Brain) ---
 
 model Tag {
-  id     String   @id @default(cuid())
-  name   String   @unique 
-  labels String[] 
-  links  TagRelator[]
+  id      String       @id @default(cuid())
+  name    String       @unique 
+  labels  String[] 
+  links   TagRelator[]
+  users   User[]
 }
 
 model TagRelator {
   id          String   @id @default(cuid())
   tagId       String
   tag         Tag      @relation(fields: [tagId], references: [id])
-
-  // Sentiment tracking for the AI
   likes       Int      @default(0)
   dislikes    Int      @default(0)
 
-  // Polymorphic Links (Handled with XOR logic in App)
   unitId      String?
-  unit        Unit?      @relation(fields: [unitId], references: [id])
+  unit        Unit?            @relation(fields: [unitId], references: [id])
   lessonId    String?
-  lesson      Lesson?    @relation(fields: [lessonId], references: [id])
+  lesson      Lesson?          @relation(fields: [lessonId], references: [id])
   paragraphId String?
   paragraph   MasterParagraph? @relation(fields: [paragraphId], references: [id])
   analogyId   String?
@@ -192,18 +189,56 @@ model TagRelator {
 model MasterAnalogy {
   id          String   @id @default(cuid())
   content     String   @db.Text
-  category    String   // e.g., "Farming"
+  category    String   
   isDefault   Boolean  @default(false)
 
   unitId      String?
-  unit        Unit?      @relation(fields: [unitId], references: [id])
+  unit        Unit?            @relation(fields: [unitId], references: [id])
   lessonId    String?
-  lesson      Lesson?    @relation(fields: [lessonId], references: [id])
+  lesson      Lesson?          @relation(fields: [lessonId], references: [id])
   paragraphId String?
   paragraph   MasterParagraph? @relation(fields: [paragraphId], references: [id])
 
-  tagLinks    TagRelator[]
-  selections  UserSelection[]
+  tagLinks      TagRelator[]
+  selections    UserSelection[]
+  userAnalogies UserAnalogy[]
+}
+
+// --- NEW: USER COLLECTIONS (The AI "Analogies" and "Keywords") ---
+
+model UserAnalogy {
+  id              String   @id @default(cuid())
+  content         String   @db.Text
+  interestContext String   // The Tag name or label used to generate this
+  
+  userId          String
+  user            User     @relation(fields: [userId], references: [id])
+  
+  masterAnalogyId String?
+  master          MasterAnalogy? @relation(fields: [masterAnalogyId], references: [id])
+  
+  paragraphId     String
+  paragraph       MasterParagraph @relation(fields: [paragraphId], references: [id])
+
+  createdAt       DateTime @default(now())
+  
+  @@map("user_analogies")
+}
+
+model UserKeyword {
+  id              String   @id @default(cuid())
+  word            String
+  customDefinition String  @db.Text
+  
+  userId          String
+  user            User     @relation(fields: [userId], references: [id])
+  
+  masterKeywordId String?
+  master          MasterKeyword? @relation(fields: [masterKeywordId], references: [id])
+
+  createdAt       DateTime @default(now())
+  
+  @@map("user_keywords")
 }
 
 model UserSelection {
