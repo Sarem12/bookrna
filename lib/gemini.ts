@@ -1,5 +1,5 @@
 import { GoogleGenerativeAI } from "@google/generative-ai";
-
+import { lesson } from "../datarelated/data";
 // 1. --- TYPES (Aligned with Prisma Schema) ---
 export type PromptType = 'analogy' | 'keyword' | 'summary' | 'paragraph';
 
@@ -8,15 +8,21 @@ export type UserProfile = {
     age: number;
     tags: string[]; // These are the Tag names from your DB
 };
-
+export type stringifiedContent = {
+    content: string;
+    depth: number;
+}
 export type MasterParagraph = {
     content: string;
     lessonId: string;
 };
 
 export type Lesson = {
+    index: number; // Position within the unit
     title: string;
     paragraphs: MasterParagraph[];
+    sublessons: Lesson[]; 
+    // Allow nested lessons for flexibility
 };
 
 export type Unit = {
@@ -26,13 +32,35 @@ export type Unit = {
 
 // 2. --- SETUP ---
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!);
-const CURRENT_MODEL = "gemini-2.5-flash-lite";
+const CURRENT_MODEL = "gemini-3.1-flash-lite-preview";
 
 // 3. --- CORE FUNCTIONS ---
+export  function stringifyLesson(Lesson: Lesson,index:string = Lesson.index.toString(),depth: number = 0): stringifiedContent{
+      let text = `
+       ${Lesson.title}\n` + Lesson.paragraphs.map(p => p.content).join("\n");
+    if(Lesson.sublessons.length > 0) depth ++;
+       for (const sub of Lesson.sublessons) {
+        const subc= stringifyLesson(sub,`${index}.${sub.index}`, depth);
+        text += `\n${subc.content}`;
+        depth = Math.max(depth, subc.depth);
+    }
+    return { content: text, depth};
+}
+
+export function stringifyUnit(unit: Unit): stringifiedContent {
+    let text = `Unit: ${unit.title}\n`;
+    unit.lessons.forEach(lesson => {
+        text += stringifyLesson(lesson).content + "\n";
+    });
+    return { content: text, depth: 10 };
+}
+export function stringifyMasterParagraph(paragraph: MasterParagraph):stringifiedContent {
+    return { content: paragraph.content, depth: 0 };
+}
 
 export async function generateContent(payload: {
     user: UserProfile;
-    target: MasterParagraph | Lesson | Unit;
+    target: stringifiedContent;
     requestType: PromptType;
 }) {
     const model = genAI.getGenerativeModel({
@@ -48,31 +76,41 @@ export async function generateContent(payload: {
         analogy: `{ "content": "string", "logic": "string", "interestContext": "string" }`,
         keyword: `{ "keywords": [{ "word": "string", "definition": "string" }] }`
     };
-
+    
     let taskInstructions = "";
     switch (payload.requestType) {
         case 'paragraph':
+            if(payload.target.depth > 0) throw new Error("Paragraph generation don't accept depth higher than 1")
             taskInstructions = `
-                REWRITE the text using technical/systemic vocabulary (e.g., storage, execution, transmission).
-                STRICT RULE: No analogies. Do NOT use "like", "as", "similar to", or "think of". 
-                Describe the biological process as a direct technical operation.`;
+                REWRITE the text so it makes sense to someone who understands: ${payload.user.tags.join(", ")}. 
+                FOCUS on the logical flow: How is info stored? How is it moved? How is it used?
+                STRICT RULES:
+                1. DO NOT use misleading "tech-hybrid" words like "binary-encoded" or "storage module".
+                2. Use natural, human language that explains the process as a logical system.
+                3. No "is like" or "as" analogies. Just describe the operation directly.`;
             break;
+            
         case 'keyword':
+
             taskInstructions = `
-               IDENTIFY core technical terms.
-               DEFINE them by mapping their function to the user's mental model (${payload.user.tags.join(", ")}).
-               STRICT RULES:
-               1. No "is like" or "think of".
-               2. State what the term IS as a functional component of a system.
-               3. Use systemic vocabulary (e.g., storage, execution, protocol, data).`;
+                IDENTIFY core terms.
+                DEFINE them by explaining their functional role within a system. 
+                Use the logic of ${payload.user.tags.join(", ")} to make the definition click.
+                STRICT RULES:
+                1. No "is like" or "think of". 
+                2. If the user likes Computers, explain the term as a "Master Record" or "Instruction Set" rather than "Hard Drive".
+                3. Keep it scientifically accurate but conceptually familiar.`;
             break;
+            
         case 'analogy':
+            if(payload.target.depth >1) throw new Error("Analogy don't accept depth higher than 1")
             taskInstructions = `
-                CREATE a direct metaphor using the user's interests: ${payload.user.tags.join(", ")}. 
-                Explain the unknown using the known.`;
+                Create a simple, conversational metaphor using ${payload.user.tags.join(", ")}. 
+                Keep it grounded and easy to explain to a friend.`;
             break;
+            
         case 'summary':
-            taskInstructions = `Summarize the content in 1-2 sentences using vocabulary familiar to the user.`;
+            taskInstructions = `Summarize this in 1-2 plain-English sentences that emphasize the logical flow of information.`;
             break;
     }
 
@@ -135,44 +173,5 @@ export async function getTagsFromAI(userBio: string, existingTags: string[]) {
     return [];
   }
 }
-async function runBiologyExperiment() {
-    console.log("🧪 Running Subconscious Personalization: Biology x Computer Science");
 
-    const mockUser: UserProfile = {
-        gender: 'MALE',
-        age: 21,
-        tags: ["Computer"]
-    };
-
-    const rnaParagraph: MasterParagraph = {
-        lessonId: "cls123",
-        content: "DNA (Deoxyribonucleic acid) is a molecule that carries genetic instructions for the development and functioning of living organisms. RNA (Ribonucleic acid) acts as a messenger, carrying instructions from DNA for controlling the synthesis of proteins."
-    };
-
-    // Test Paragraph Personalization (Subconscious)
-    console.log("\n--- 📝 PERSONALIZED PARAGRAPH (Subconscious) ---");
-    const paragraphResult = await generateContent({
-        user: mockUser,
-        target: rnaParagraph,
-        requestType: 'paragraph'
-    });
-    console.log(paragraphResult);
-
-    // Test Analogy (Direct Metaphor)
-    console.log("\n--- 🧠 DIRECT ANALOGY ---");
-    const analogyResult = await generateContent({
-        user: mockUser,
-        target: rnaParagraph,
-        requestType: 'analogy'
-    });
-    console.log(analogyResult);
-    console.log("\n--- 🔑 KEYWORDS ---");
-    const keywordResult = await generateContent({
-        user: mockUser,
-        target: rnaParagraph,
-        requestType: 'keyword'
-    });
-    console.log(keywordResult);
-}
-
-runBiologyExperiment();
+// runBiologyExperiment();
