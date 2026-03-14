@@ -1,0 +1,10 @@
+{
+  "name": "realParagraph",
+  "data": [
+    {"id": "rp1", "content": "The Nucleus contains DNA and coordinates cell growth.", "LessonId": "L1"},
+    {"id": "rp2", "content": "Mitochondria generate ATP energy via respiration.", "LessonId": "L1"},
+    {"id": "rp3", "content": "The Cell Membrane regulates the passage of molecules.", "LessonId": "L1"},
+    {"id": "rp4", "content": "Ribosomes synthesize proteins from RNA instructions.", "LessonId": "L1"},
+    {"id": "rp5", "content": "DNA Helicase unzips the double helix for replication.", "LessonId": "L2"}
+  ]
+}

@@ -1,0 +1,13 @@
+{
+  "name": "userTag",
+  "data": [
+    {"id": "ut1", "UserId": "u1", "TagId": "t1", "likingLevel": 5},
+    {"id": "ut2", "UserId": "u1", "TagId": "t2", "likingLevel": 4},
+    {"id": "ut3", "UserId": "u2", "TagId": "t3", "likingLevel": 5},
+    {"id": "ut4", "UserId": "u3", "TagId": "t5", "likingLevel": 5},
+    {"id": "ut5", "UserId": "u4", "TagId": "t8", "likingLevel": 5},
+    {"id": "ut6", "UserId": "u5", "TagId": "t7", "likingLevel": 5},
+    {"id": "ut7", "UserId": "u6", "TagId": "t4", "likingLevel": 5},
+    {"id": "ut8", "UserId": "u6", "TagId": "t10", "likingLevel": 3}
+  ]
+}

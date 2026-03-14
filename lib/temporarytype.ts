@@ -1,4 +1,7 @@
+
+
 export type Analogy = {
+    id:string;
     content: string;
     logic: string;
     lessonId?: string;
@@ -14,8 +17,8 @@ linkedWith: string[]; // Array of Tag names this tag is linked to
 
 }
 export type  TagRelator = {
-    liked: boolean; // true for like, false for dislike
-    disliked: boolean;
+    likes: number; // true for like, false for dislike
+    dislikes: number;
     id: string;
     TagId: string; // The ID of the Tag
     AnalogyId?: string; // The ID of the related Analogy

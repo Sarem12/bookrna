@@ -1,25 +1,10 @@
 {
   "name": "tagRelator",
   "data": [
-    {"id": "r-1", "tagId": "t-1", "analogyId": "a-1", "liked": true, "disliked": false},
-    {"id": "r-2", "tagId": "t-2", "analogyId": "a-1", "liked": true, "disliked": false},
-    {"id": "r-3", "tagId": "t-1", "analogyId": "a-3", "liked": true, "disliked": false},
-    {"id": "r-4", "tagId": "t-4", "analogyId": "a-4", "liked": true, "disliked": false},
-    {"id": "r-5", "tagId": "t-2", "analogyId": "a-5", "liked": true, "disliked": false},
-    {"id": "r-6", "tagId": "t-1", "analogyId": "a-8", "liked": true, "disliked": false},
-    {"id": "r-7", "tagId": "t-9", "analogyId": "a-9", "liked": true, "disliked": false},
-    {"id": "r-8", "tagId": "t-2", "analogyId": "a-10", "liked": true, "disliked": false},
-    {"id": "r-9", "tagId": "t-1", "analogyId": "a-11", "liked": true, "disliked": false},
-    {"id": "r-10", "tagId": "t-2", "analogyId": "a-12", "liked": true, "disliked": false},
-    {"id": "r-11", "tagId": "t-7", "analogyId": "a-13", "liked": true, "disliked": false},
-    {"id": "r-12", "tagId": "t-6", "analogyId": "a-14", "liked": true, "disliked": false},
-    {"id": "r-13", "tagId": "t-8", "analogyId": "a-15", "liked": true, "disliked": false},
-    {"id": "r-14", "tagId": "t-7", "analogyId": "a-17", "liked": true, "disliked": false},
-    {"id": "r-15", "tagId": "t-8", "analogyId": "a-18", "liked": true, "disliked": false},
-    {"id": "r-16", "tagId": "t-2", "analogyId": "a-19", "liked": true, "disliked": false},
-    {"id": "r-17", "tagId": "t-1", "analogyId": "a-22", "liked": true, "disliked": false},
-    {"id": "r-18", "tagId": "t-1", "analogyId": "a-23", "liked": true, "disliked": false},
-    {"id": "r-19", "tagId": "t-10", "analogyId": "a-28", "liked": true, "disliked": false},
-    {"id": "r-20", "tagId": "t-3", "analogyId": "a-10", "liked": true, "disliked": false}
+    { "id": "rel1", "TagId": "t1", "AnalogyId": "a1", "likes": 45, "dislikes": 2 },
+    { "id": "rel2", "TagId": "t1", "AnalogyId": "a22", "likes": 89, "dislikes": 5 },
+    { "id": "rel3", "TagId": "t2", "AnalogyId": "a4", "likes": 12, "dislikes": 1 },
+    { "id": "rel4", "TagId": "t1", "AnalogyId": "a9", "likes": 0, "dislikes": 25 },
+    { "id": "rel5", "TagId": "t3", "AnalogyId": "a9", "likes": 67, "dislikes": 3 }
   ]
 }

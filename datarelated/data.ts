@@ -7,6 +7,7 @@ import tagi from "./database/tag.json";
 import analogyi from "./database/analogy.json";
 import taguseri from "./database/tagUser.json";
 import tagrelatori from "./database/tagRelator.json";
+import realparagraphi from "./database/realParagraph.json";
 export function Create(inp:any){
     return {data:inp.data,out:(newData:any)=>{
         try {
@@ -34,3 +35,4 @@ export const {data:tag, out:tagOut} = Create(tagi);
 export const {data:analogy, out:analogyOut} = Create(analogyi);
 export const {data:tagUser, out:tagUserOut} = Create(taguseri);
 export const {data:tagRelator, out:tagRelatorOut} = Create(tagrelatori);
+export const {data:realParagraph, out:realParagraphOut} = Create(realparagraphi);
