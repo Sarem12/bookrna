@@ -1,21 +1,28 @@
 import { GoogleGenerativeAI } from "@google/generative-ai";
-import { lesson } from "../datarelated/data";
-import { MasterParagraph, PromptType, stringifiedContent, Unit, UserProfile ,Lesson} from "./types";
-// 1. --- TYPES (Aligned with Prisma Schema) ---
+import { PromptType, stringifiedContent, UserProfile } from "./types";
+import { ProbabilityManager } from "./apiprobablitymanager";
 
+// 1. --- SETUP ---
+const probablityEngine = new ProbabilityManager([
+    process.env.GEMINI_API_KEY!,
+    process.env.GEMINI_API_KEY_2!,
+    process.env.GEMINI_API_KEY_3!,
+]);
 
-// 2. --- SETUP ---
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!);
 const CURRENT_MODEL = "gemini-3.1-flash-lite-preview";
 
-// 3. --- CORE FUNCTIONS ---
-
+// 2. --- CORE FUNCTIONS ---
 
 export async function generateContent(payload: {
     user: UserProfile;
     target: stringifiedContent;
     requestType: PromptType;
-}) {
+}, attempt = 1): Promise<any> {
+    
+    const activeKey = probablityEngine.getKey();
+    if (!activeKey) return { error: "CRITICAL: All API keys exhausted." };
+
+    const genAI = new GoogleGenerativeAI(activeKey);
     const model = genAI.getGenerativeModel({
         model: CURRENT_MODEL,
         generationConfig: { responseMimeType: "application/json" }
@@ -33,98 +40,106 @@ export async function generateContent(payload: {
     let taskInstructions = "";
     switch (payload.requestType) {
         case 'paragraph':
-            if(payload.target.depth > 0) throw new Error("Paragraph generation don't accept depth higher than 1")
+            if(payload.target.depth > 0) throw new Error("Paragraph generation doesn't accept depth > 1")
             taskInstructions = `
-                REWRITE the text so it makes sense to someone who understands: ${payload.user.tags.join(", ")}. 
-                FOCUS on the logical flow: How is info stored? How is it moved? How is it used?
+                REWRITE the text into a clear, step-by-step explanation using markdown **bolding** for key biological terms.
+        
                 STRICT RULES:
-                1. DO NOT use misleading "tech-hybrid" words like "binary-encoded" or "storage module".
-                2. Use natural, human language that explains the process as a logical system.
-                3. No "is like" or "as" analogies. Just describe the operation directly.`;
+                1. NO ANALOGIES: Absolutely no "It is like" or "Think of this as."
+                2. NO INTEREST VOCABULARY: Do not use words like "game," "computer," "code," "loot," or "space." 
+                3. SYSTEM LOGIC: Use the functional logic of ${payload.user.tags[0]} to organize the flow (input -> process -> output) but use neutral, professional science language.
+                4. WORD CHOICE: Use clear words like "transformed," "processed," or "assigned."
+                5. PHYSICAL STEPS: Use "part" for "apparatus," "small bags" for "vesicles," and "sending out" for "secretion." 
+                6. SCIENTIFIC NAMES: You MUST keep the core biological terms (e.g., Golgi apparatus) so the lesson remains accurate.
+                7. TONE: Write a direct, factual note. No "chill" or "mentor" personality.
+                8. FORMATTING: Do NOT add numbers (1., 2.) or bullets. Write flowing sentences.`;
             break;
             
         case 'keyword':
-
             taskInstructions = `
-                IDENTIFY core terms.
-                DEFINE them by explaining their functional role within a system. 
-                Use the logic of ${payload.user.tags.join(", ")} to make the definition click.
+                Pick the main biological terms. Define them by their JOB in the system.
+        
                 STRICT RULES:
-                1. No "is like" or "think of". 
-                2. If the user likes Computers, explain the term as a "Master Record" or "Instruction Set" rather than "Hard Drive".
-                3. Keep it scientifically accurate but conceptually familiar.`;
+                1. NO METAPHORS: Do not use "game," "computer," "code," etc.
+                2. SYSTEM ROLE: Explain what the part DOES (e.g., "The part that sorts items").
+                3. SIMPLE LANGUAGE: Use words a 10-year-old knows. 
+                   - "made" instead of "synthesized"
+                   - "moving" instead of "transport"
+                4. ACCURACY: Keep the core scientific term as the keyword.`;
             break;
             
         case 'analogy':
-            if(payload.target.depth >1) throw new Error("Analogy don't accept depth higher than 1")
+            if(payload.target.depth > 1) throw new Error("Analogy doesn't accept depth > 1")
             taskInstructions = `
-                Create a simple, conversational metaphor using ${payload.user.tags.join(", ")}. 
-                Keep it grounded and easy to explain to a friend.`;
+                Create ONE very simple metaphor using the logic of ${payload.user.tags.join(" or ")}.
+                Use it to explain the main goal of the process. Keep it to 2 sentences.`;
             break;
             
         case 'summary':
-            taskInstructions = `Summarize this in 1-2 plain-English sentences that emphasize the logical flow of information.`;
+            taskInstructions = `
+                Summarize the main process in 10 simple words or less.
+                STRICT RULES:
+                1. NO INTEREST WORDS: Do not use "game," "computer," etc.
+                2. SYSTEM FLOW: Focus only on how items move or change.
+                3. VOCABULARY: Use the simplest possible action words.`;
             break;
     }
 
     const finalPrompt = `
-        ACT AS: Bekam, a cognitive learning architect.
+        ACT AS: A Plain English Science Guide.
         USER_INTERESTS: ${payload.user.tags.join(", ")}
-        
         TASK: ${taskInstructions}
         SOURCE_TEXT: "${textToProcess}"
 
         STRICT RULES:
         - Return ONLY JSON.
-        - No conversational filler.
-        - Absolute technical accuracy.
+        - NO "textbook" language. No slang. Just clear, simple facts.
 
         OUTPUT_FORMAT: ${jsonSchemas[payload.requestType]}
     `;
 
     try {
         const result = await model.generateContent(finalPrompt);
-        return JSON.parse(result.response.text());
-    } catch (e) {
-        console.error("Bekam AI Error:", e);
-        return { error: "Failed to generate." };
+        const responseText = result.response.text();
+        
+        // CLEANING LOGIC: Strips markdown code blocks and whitespace
+        const cleanJson = responseText
+            .replace(/```json/g, "")
+            .replace(/```/g, "")
+            .trim();
+            
+        return JSON.parse(cleanJson);
+    } catch (e: any) {
+        if (e.status === 429 || e.message?.includes("429")) {
+            probablityEngine.disableKey(activeKey);
+            if (attempt < 3) return generateContent(payload, attempt + 1);
+        }
+        return { error: "Failed to generate content." };
     }
 }
-export async function getTagsFromAI(userBio: string, existingTags: string[]) {
-  try {
-    if (userBio.length < 10) return []; // Too short to have "main points"
 
-    const model = genAI.getGenerativeModel({
-      model: "gemini-2.5-flash-lite",
-      generationConfig: { 
-        responseMimeType: "application/json",
-        temperature: 0.3 // Slightly higher to catch more "variety" in hobbies
-      }
-    });
+export async function getTagsFromAI(userBio: string, existingTags: string[], attempt = 1): Promise<any> {
+    const activeKey = probablityEngine.getKey();
+    if (!activeKey || userBio.length < 10) return [];
 
-    const prompt = `
-      USER_BIO: "${userBio}"
-      EXISTING_DATABASE_TAGS: ${JSON.stringify(existingTags)}
+    try {
+        const genAI = new GoogleGenerativeAI(activeKey);
+        const model = genAI.getGenerativeModel({
+            model: CURRENT_MODEL,
+            generationConfig: { responseMimeType: "application/json", temperature: 0.1 }
+        });
 
-      TASK: 
-      Identify and extract all distinct interests, hobbies, or professional fields mentioned. 
-      Do not follow a strict word-to-tag ratio—focus on capturing the "Main Points" of their identity.
+        const prompt = `Extract interests and properties of the user from: "${userBio}". Match them only to categories in: ${JSON.stringify(existingTags)}. Return a JSON string array.`;
 
-      RULES:
-      1. EXTRACT ALL: If they mention 5 different hobbies in 20 words, extract all 5.
-      2. MAPPING: Convert specific titles to general categories (e.g., "Call of Duty" -> "Gaming", "Star Wars" -> "Sci-Fi").
-      3. DATABASE SYNC: Use names from EXISTING_DATABASE_TAGS if they match the user's intent.
-      4. MAX LIMIT: Cap the output at 10 tags total to prevent database clutter.
-      5. OUTPUT: Return only a JSON array of strings.
-    `;
+        const result = await model.generateContent(prompt);
+        const cleanJson = result.response.text().replace(/```json|```/g, "").trim();
+        return JSON.parse(cleanJson) as string[];
 
-    const result = await model.generateContent(prompt);
-    return JSON.parse(result.response.text()) as string[];
-
-  } catch (e) {
-    console.error("Bekam Tagging Error:", e);
-    return [];
-  }
+    } catch (e: any) {
+        if (e.status === 429 || e.message?.includes("429")) {
+            probablityEngine.disableKey(activeKey); 
+            if (attempt < 3) return getTagsFromAI(userBio, existingTags, attempt + 1);
+        }
+        return [];
+    }
 }
-
-// runBiologyExperiment();

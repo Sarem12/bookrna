@@ -9,7 +9,10 @@ export type Analogy = {
     likes: number;
     dislikes: number;
 }
-
+export type AnalogyDefault = {
+    id:string;
+    AnalogyId?: string; // The ID of the related Analogy (for personalized versions)
+}
 export type Tag = {
 id:string; 
 name:string;
