@@ -31,6 +31,7 @@ import tagRelatorSummeryi from "./database/tagRelatorSummery.json";
 import tagRelatorKeyWordsi from "./database/tagRelatorKeyWords.json";
 import tagRelatorNotei from "./database/tagRelatorNote.json";
 
+import usertagi from "./database/userTag.json";
 // --- FACTORY FUNCTION ---
 export function Create(inp: any) {
     return {
@@ -78,3 +79,4 @@ export const { data: tagRelatorParagraph, out: tagRelatorParagraphOut } = Create
 export const { data: tagRelatorSummery, out: tagRelatorSummeryOut } = Create(tagRelatorSummeryi);
 export const { data: tagRelatorKeyWords, out: tagRelatorKeyWordsOut } = Create(tagRelatorKeyWordsi);
 export const { data: tagRelatorNote, out: tagRelatorNoteOut } = Create(tagRelatorNotei);
+export const { data: userTag, out: userTagOut } = Create(usertagi);

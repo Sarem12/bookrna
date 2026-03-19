@@ -4,7 +4,7 @@ import {
     Summery, UserSummery, TagRelatorSummery,
     KeyWord, KeyWords, UserKeyWords, TagRelatorKeyWords, 
     UserNote, Note, TagRelatorNote, UniversalTag
-} from "./temporarytype";
+} from "./types";
 
 import { 
     analogy, tagUser, tagRelatorAnalogy, tag, userAnalogy,
@@ -91,7 +91,7 @@ function pickWinner<T>(scoredItems: { item: T, score: number, tagCount: number }
 export async function GetBestAnalogy(targetId: string, type: 'paragraph' | 'lesson', userId: string): Promise<Analogy | null> {
     if (!targetId || !userId) return null;
     const profile = (tagUser as UserTag[]).filter(u => u.UserId === userId);
-    const blocked = (userAnalogy as UserAnalogy[]).filter(ua => ua.UserId === userId && (ua.flaged || ua.status === 'dislike')).map(ua => ua.AnalogyId);
+    const blocked = (userAnalogy as UserAnalogy[]).filter(ua => ua.UserId === userId && (ua.flaged || ua.status === 'disliked' || ua.skiped)).map(ua => ua.AnalogyId);
 
     const candidates = (analogy as Analogy[]).filter(item => {
         if (blocked.includes(item.id)) return false;
@@ -117,17 +117,39 @@ export async function ChangeToBestAnalogy(currentId: string, userId: string): Pr
     const curr = (analogy as Analogy[]).find(a => a.id === currentId);
     if (!curr) return null;
 
-    // Excludes currentId, finds other variants of the same Master Concept
+    // 1. Identify valid Paragraph IDs for this Master Concept
     const masterId = (paragraph as Paragraph[]).find(p => p.id === curr.ParagraphId)?.MasterParagraphId;
     const validParaIds = (paragraph as Paragraph[]).filter(p => p.MasterParagraphId === masterId).map(p => p.id);
     
-    const candidates = (analogy as Analogy[]).filter(a => a.id !== currentId && a.ParagraphId && validParaIds.includes(a.ParagraphId));
+    // 2. Find Candidates + FILTER OUT SKIPPED
+    const candidates = (analogy as Analogy[]).filter(a => {
+        // Must be a different ID and belong to the same concept
+        const isDifferentAndValid = a.id !== currentId && a.ParagraphId && validParaIds.includes(a.ParagraphId);
+        
+        // Find if this specific user has skipped this specific candidate
+        const uaRecord = (userAnalogy as UserAnalogy[]).find(ua => ua.UserId === userId && ua.AnalogyId === a.id);
+        const isNotSkipped = !uaRecord || uaRecord.skiped !== true;
+
+        return isDifferentAndValid && isNotSkipped;
+    });
+
+    // 3. Get tags of the rejected (current) analogy to avoid similar logic if possible
     const rejTags = (tagRelatorAnalogy as TagRelatorAnalogy[]).filter(r => r.AnalogyId === currentId).map(r => r.TagId);
     
-    return pickWinner(candidates.map(item => {
-        const { score, tagCount } = calculateScore(item.id, 'AnalogyId', tagRelatorAnalogy, (tagUser as UserTag[]).filter(u => u.UserId === userId), item.createdAt, rejTags);
+    // 4. Score and Pick
+    const scoredCandidates = candidates.map(item => {
+        const { score, tagCount } = calculateScore(
+            item.id, 
+            'AnalogyId', 
+            tagRelatorAnalogy, 
+            (tagUser as UserTag[]).filter(u => u.UserId === userId), 
+            item.createdAt, 
+            rejTags
+        );
         return { item, score, tagCount };
-    }));
+    });
+
+    return pickWinner(scoredCandidates);
 }
 
 // ==========================================

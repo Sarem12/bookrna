@@ -1,7 +1,8 @@
 import { GoogleGenerativeAI } from "@google/generative-ai";
-import { PromptType, stringifiedContent, UserProfile } from "./types";
+import { PromptType, stringifiedContent, User } from "./types";
 import { ProbabilityManager } from "./apiprobablitymanager";
-
+import { UserTag,Tag,UniversalTag } from "./types";
+import { userTag,tag,universalTag } from "@/datarelated/data";
 
 const probablityEngine = new ProbabilityManager([
     process.env.GEMINI_API_KEY!,
@@ -14,7 +15,7 @@ const CURRENT_MODEL = "gemini-3.1-flash-lite-preview";
 
 
 export async function generateContent(payload: {
-    user: UserProfile;
+    user: User;
     target: stringifiedContent;
     requestType: PromptType;
 }, attempt = 1): Promise<any> {
@@ -29,36 +30,48 @@ export async function generateContent(payload: {
     });
 
     const textToProcess = 'content' in payload.target ? payload.target.content : JSON.stringify(payload.target);
+    const usertag = userTag.filter(ut => ut.UserId === payload.user.id) as UserTag[];
 
-    const jsonSchemas: Record<PromptType, string> = {
-        summary: `{ "summary": "string" }`,
-        paragraph: `{ "personalized": "string" }`,
-        analogy: `{ "content": "string", "logic": "string", "interestContext": "string","tagsUsed": ["string"] }`,
-        keyword: `{ "keywords": [{ "word": "string", "definition": "string" }] }`,
-        note:`{ "content": "string" }`
-    };
-    
+const userInterests = usertag.map(ut => {
+    const tagInfo = (tag as Tag[]).find(t => t.id === ut.TagId);
+    return tagInfo ? tagInfo.name : null; 
+}).filter(Boolean) as string[]; 
+
+
+const universalInterests = (tag as Tag[])
+    .filter(t => (universalTag as UniversalTag[]).some(ut => ut.TagId === t.id))
+    .map(t => t.name)
+    .filter(Boolean); 
+// const allinterests = Array.from(new Set([...userInterests, ...universalInterests]));
+  const jsonSchemas: Record<PromptType, string> = {
+    summary: `{ "summary": "string", "tagsUsed": ["string"] }`,
+    paragraph: `{ "personalized": "string", "tagsUsed": ["string"] }`,
+    analogy: `{ "content": "string", "logic": "string", "interestContext": "string", "tagsUsed": ["string"] }`,
+    keyword: `{ "keywords": [{ "word": "string", "definition": "string" }], "tagsUsed": ["string"] }`, // Added tagsUsed
+    note: `{ "content": "string", "tagsUsed": ["string"] }` // Added tagsUsed
+}
+
     let taskInstructions = "";
     switch (payload.requestType) {
         case 'paragraph':
             if(payload.target.depth > 0) throw new Error("Paragraph generation doesn't accept depth > 1")
             taskInstructions = `
-                REWRITE the text into a clear, step-by-step explanation using markdown **bolding** for key biological terms.
+                REWRITE the text into a clear, step-by-step explanation using markdown **bolding** for key terms.
         
                 STRICT RULES:
                 1. NO ANALOGIES: Absolutely no "It is like" or "Think of this as."
                 2. NO INTEREST VOCABULARY: Do not use words like "game," "computer," "code," "loot," or "space." 
-                3. SYSTEM LOGIC: Use the functional logic of ${payload.user.tags[0]} to organize the flow (input -> process -> output) but use neutral, professional science language, make a better flow from the old one.
+                3. SYSTEM LOGIC: Use the functional logic of USER_INTERESTS & UNIVERSAL_INTERESTS to organize the flow (input -> process -> output) but use neutral, professional science language, make a better flow from the old one.
                 4. WORD CHOICE: Use clear words like "transformed," "processed," or "assigned."
                 5. PHYSICAL STEPS: Use "part" for "apparatus," "small bags" for "vesicles," and "sending out" for "secretion." 
-                6. SCIENTIFIC NAMES: You MUST keep the core biological terms (e.g., Golgi apparatus) so the lesson remains accurate.
+                6. SCIENTIFIC NAMES: You MUST keep the core terms (e.g., Golgi apparatus) so the lesson remains accurate.
                 7. TONE: Write a direct, factual note. No "chill" or "mentor" personality.
                 8. FORMATTING: Do NOT add numbers (1., 2.) or bullets. Write flowing sentences.`;
             break;
             
         case 'keyword':
             taskInstructions = `
-                Pick the main biological terms. Define them by their JOB in the system.
+                Pick the main terms. Define them by their JOB in the system.
         
                 STRICT RULES:
                 1. NO METAPHORS: Do not use "game," "computer," "code," etc.
@@ -72,9 +85,9 @@ export async function generateContent(payload: {
         case 'analogy':
             if(payload.target.depth > 1) throw new Error("Analogy doesn't accept depth > 1")
             taskInstructions = `
-               1. CREATE: One simple metaphor for the biological process using the logic of: ${payload.user.tags.join(", ")}.
+               1. CREATE: One simple metaphor for the given text process using the logic of: USER_INTERESTS & UNIVERSAL_INTERESTS.
         2. CONTENT: Keep the explanation to 2 sentences.
-        3. LOGIC: Explain how the biological process and the interest share the same functional steps.
+        3. LOGIC: Explain how the process and the interest share the same functional steps.
         4. CONTEXT: Identify which specific interest you used (e.g., "Gaming" or "Physics").
         5. TAGS: List the tags you used from the user's interests exactly the same name with out case changes.
 
@@ -101,35 +114,35 @@ export async function generateContent(payload: {
                 2. FOCUS: Capture the core concept or function in a single, clear sentence.
                 3. TONE: Write a direct, factual note. No "chill" or "mentor" personality.
                 4. FORMATTING: Do NOT add numbers (1., 2.) or bullets. Write a flowing sentence.
-                5. SYSTEM LOGIC: Use the functional logic of ${payload.user.tags[0]} to organize the flow (input -> process -> output) but use neutral, professional science language.
+                5. SYSTEM LOGIC: Use the functional logic of USER_INTERESTS & UNIVERSAL_INTERESTS to organize the flow (input -> process -> output) but use neutral, professional science language.
                 `;
             break;
     }
 
     const finalPrompt = `
         ACT AS: A Plain English Science Guide.
-        USER_INTERESTS: ${payload.user.tags.join(", ")}
+        USER_INTERESTS: ${userInterests.join(", ")}
+        UNIVERSAL_INTERESTS: ${universalInterests.join(", ")}
         TASK: ${taskInstructions}
         SOURCE_TEXT: "${textToProcess}"
 
         STRICT RULES:
         - Return ONLY JSON.
         - NO "textbook" language. No slang. Just clear, simple facts.
-
+        - priority of USER_INTERESTS over UNIVERSAL_INTERESTS if there's overlap in logic.
+        - tagsUsed Must only include tags that are used in the ${payload.requestType} you generated and should have teh exact same name with no Case changes.
         OUTPUT_FORMAT: ${jsonSchemas[payload.requestType]}
     `;
 
     try {
         const result = await model.generateContent(finalPrompt);
-        const responseText = result.response.text();
-        
+      const responseText = result.response.text();
 
-        const cleanJson = responseText
-            .replace(/```json/g, "")
-            .replace(/```/g, "")
-            .trim();
-            
-        return JSON.parse(cleanJson);
+
+const jsonMatch = responseText.match(/\{[\s\S]*\}/);
+const cleanJson = jsonMatch ? jsonMatch[0] : responseText;
+
+return JSON.parse(cleanJson);
     } catch (e: any) {
         if (e.status === 429 || e.message?.includes("429")) {
             probablityEngine.disableKey(activeKey);
