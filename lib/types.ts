@@ -48,7 +48,14 @@ export type User = {
     id: string;
     gender: 'MALE' | 'FEMALE';
     age: number;
-    name: string;
+    first: string;
+    last: string;
+    email: string;
+    password: string;
+    imgUrl: string;
+    createdAt: string;
+    userspecificAPI:string[];
+    UISettings: Record<string, any>;
 }
 
 export type UserTag = {
@@ -344,4 +351,10 @@ export type TagRelatorNote = {
     views: number;
     usage: number;
     flags: number;
+}
+export type Box = {
+    id:string;
+    title:string;
+    content:string;
+    class:string; // classing for css
 }

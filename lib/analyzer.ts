@@ -3,7 +3,9 @@ import {
     RealParagraph, Paragraph, TagRelatorParagraph, 
     Summery, UserSummery, TagRelatorSummery,
     KeyWord, KeyWords, UserKeyWords, TagRelatorKeyWords, 
-    UserNote, Note, TagRelatorNote, UniversalTag,UserParagraph
+    UserNote, Note, TagRelatorNote, UniversalTag,UserParagraph,
+    DefaultParagraph,
+    DefaultAnalogy
 } from "./types";
 
 import { 
@@ -12,7 +14,9 @@ import {
     summery, tagRelatorSummery, userSummery,
     keyword, keywords, tagRelatorKeyWords, userKeyWords,
     tagRelatorNote, userNote, note, universalTag,
-    userParagraph
+    userParagraph,
+    masterParagraph,
+    analogyDefault
 } from "@/datarelated/data";
 
 /**
@@ -92,8 +96,9 @@ function pickWinner<T>(scoredItems: { item: T, score: number, tagCount: number }
 
 
 export async function ChangeToBestAnalogy(currentId: string, userId: string): Promise<Analogy | null> {
-    const curr = (analogy as Analogy[]).find(a => a.id === currentId);
-    if (!curr) return null;
+    try{
+    const curr = (analogyDefault as DefaultAnalogy[]).find(a => a.id === currentId);
+    if (!curr) throw new Error("Current analogy not found");
 
     // 1. Identify valid Paragraph IDs for this Master Concept
     const masterId = (paragraph as Paragraph[]).find(p => p.id === curr.ParagraphId)?.MasterParagraphId;
@@ -128,6 +133,10 @@ export async function ChangeToBestAnalogy(currentId: string, userId: string): Pr
     });
 
     return pickWinner(scoredCandidates);
+}catch(error){
+    console.error("Error in ChangeToBestAnalogy:", error);
+    return null;
+}
 }
 
 // ==========================================
@@ -238,13 +247,20 @@ export async function ChangeToBestSummery(currentId: string, userId: string): Pr
 // 4. KEYWORDS MODULE
 // ==========================================
 
-export async function GetBestKeyWord(keywordVariantId: string, type: 'lesson' | 'paragraph', userId: string): Promise<KeyWords | null> {
-    const baseVariant = (keywords as KeyWords[]).find(k => k.id === keywordVariantId);
-    if (!baseVariant) return null;
+export async function GetBestKeyWord(targetId: string, type: 'lesson' | 'paragraph', userId: string): Promise<KeyWords | null> {
+    const profile = (tagUser as UserTag[]).filter(u => u.UserId === userId);
     
     const blocked = (userKeyWords as UserKeyWords[]).filter(uk => uk.UserId === userId && uk.skiped).map(uk => uk.KeyWordsId);
 
-    const candidates = (keywords as KeyWords[]).filter(k => k.DefinitionId === baseVariant.DefinitionId && !blocked.includes(k.id));
+    const candidates = (keywords as KeyWords[]).filter(k => {
+        if (blocked.includes(k.id)) return false;
+
+        if (type === 'lesson') {
+            return k.lessonId === targetId;
+        } else {
+            return k.ParagraphId === targetId;
+        }
+    });
     return pickWinner(candidates.map(item => {
         const { score, tagCount } = calculateScore(item.id, 'KeyWordsId', tagRelatorKeyWords, (tagUser as UserTag[]).filter(u => u.UserId === userId), item.createdAt);
         return { item, score, tagCount };
@@ -257,7 +273,16 @@ export async function ChangeToBestKeyWord(currentId: string, userId: string): Pr
 
     const blocked = (userKeyWords as UserKeyWords[]).filter(uk => uk.UserId === userId && uk.skiped).map(uk => uk.KeyWordsId);
 
-    const candidates = (keywords as KeyWords[]).filter(k => k.DefinitionId === curr.DefinitionId && k.id !== currentId && !blocked.includes(k.id));
+  const candidates = (keywords as KeyWords[]).filter(k => {
+        if (blocked.includes(k.id) || k.id === currentId) return false;
+
+        if (curr.lessonId) {
+            return k.lessonId === curr.lessonId;
+        } else if (curr.ParagraphId) {
+            return k.ParagraphId === curr.ParagraphId;
+        }
+        return false;
+    });
     const rejTags = (tagRelatorKeyWords as TagRelatorKeyWords[]).filter(r => r.KeyWordsId === currentId).map(r => r.TagId);
     
     return pickWinner(candidates.map(item => {
