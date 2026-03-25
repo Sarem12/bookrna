@@ -1,43 +1,50 @@
-import Image from "next/image";
 import { getAllBooks, getUserById } from "@/lib/service";
 import { BookCard } from "@/components/BookCard";
-import { cookies } from "next/headers"; // Built-in Next.js helper
+import { cookies } from "next/headers";
+import { Header } from "@/components/Header";
+import { redirect } from "next/navigation";
 
 export default async function Home() {
   try {
-    // 1. Get the ID from the Cookie (Server-side)
     const cookieStore = await cookies();
     const userid = cookieStore.get("bekam_user_id")?.value;
 
     if (!userid) {
-       return <div className="p-10 text-white">Please log in to view your books.</div>;
+      redirect("/login");
     }
 
-    // 2. Fetch data (This runs safely on the server)
     const [books, user] = await Promise.all([
       getAllBooks(),
       getUserById(userid)
     ]);
 
-    return (
-      <div >
-        <header>
-          <h1 className="text-2xl font-bold mb-4">
-            Welcome, {user?.first} {user?.last}!
-          </h1>
-        </header>
-        
-        <div>
-          {books.map((book) => (
-            <BookCard
-              key={book.id}
-              subject={book.subject}
-              grade={book.grade}
-              imageUrl={book.imgUrl}
-              title={`${book.subject} - Grade ${book.grade}`}
-            />
-          ))}
+    // TYPE FIX: Guard clause ensures user is not null
+    if (!user) {
+      return (
+        <div className="p-10 text-white bg-slate-900 min-h-screen">
+          Profile not found. Please <a href="/login" className="underline">log in again</a>.
         </div>
+      );
+    }
+
+    return (
+      <div className="bg-slate-900 min-h-screen">
+        <Header user={user} />
+        
+        <main className="p-8">
+          <h2 className="text-2xl font-bold text-white mb-6">Your Textbooks</h2>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {books.map((book) => (
+              <BookCard
+                key={book.id}
+                subject={book.subject}
+                grade={book.grade}
+                imageUrl={book.imgUrl || "/placeholder-book.jpg"}
+                title={`${book.subject} - Grade ${book.grade}`}
+              />
+            ))}
+          </div>
+        </main>
       </div>
     );
   } catch (e: any) {

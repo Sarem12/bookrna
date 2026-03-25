@@ -9,10 +9,10 @@
     "lint": "eslint",
     "dev_ai": "npx tsx --env-file=.env lib/gemini.experiment.ts",
     "dev_ana": "npx tsx --env-file=.env lib/analyzer.experiment.ts",
-    "data:generate":"npx tsx --env-file=.env data.experiment.ts",
-    "database:generate":"npx prisma generate",
-    "database:migrate":"npx prisma migrate dev --name init",
-    "database:studio":"npx prisma studio"
+    "data:generate": "npx tsx --env-file=.env data.experiment.ts",
+    "database:generate": "npx prisma generate",
+    "database:migrate": "npx prisma migrate dev --name init",
+    "database:studio": "npx prisma studio"
   },
   "dependencies": {
     "@google/genai": "^1.45.0",
@@ -26,6 +26,7 @@
     "pg": "^8.20.0",
     "react": "19.2.3",
     "react-dom": "19.2.3",
+    "react-markdown": "^10.1.0",
     "ts-node": "^10.9.2"
   },
   "devDependencies": {

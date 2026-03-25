@@ -19,7 +19,10 @@ enum Gender {
   MALE
   FEMALE
 }
-
+enum Role {
+  STUDENT
+  ADMIN
+}
 // --- USER & AUTH ---
 
 model User {
@@ -34,6 +37,7 @@ model User {
   imgUrl          String?
   createdAt       DateTime @default(now())
   userspecificAPI String[]
+  role            Role     @default(STUDENT)
   UISettings      Json?
 
   userTags        UserTag[]
