@@ -5,7 +5,7 @@ import {
  stringifiedContent
 
 } from "@/lib/types";
-import { PrismaClient ,RealParagraph} from "@prisma/client";
+import { Prisma, PrismaClient ,RealParagraph} from "@prisma/client";
 import {prisma} from "@/lib/prisma";
 
 // import { 
@@ -17,6 +17,13 @@ import {prisma} from "@/lib/prisma";
 // } from "@/datarelated/data";
 
 import { stringifyLesson, stringifyDefaultParagraph } from "@/lib/stringifiers";
+
+function isUniqueConstraintError(error: unknown) {
+    return (
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        error.code === "P2002"
+    );
+}
 
 /**
  * GET ANALOGY
@@ -150,6 +157,7 @@ export async function GetAnalogy(UserId: string, contentId: string, type: 'lesso
  * CHANGE ANALOGY
  */
 export async function ChangeAnalogy(DefaultAnalogyId: string, userId: string) {
+    try {
     const def = await prisma.defaultAnalogy.findUnique({ where: { id: DefaultAnalogyId } });
     if (!def) return { error: "Default Analogy not found" };
 
@@ -167,37 +175,47 @@ export async function ChangeAnalogy(DefaultAnalogyId: string, userId: string) {
             where: { id: best.id },
             data: { views: { increment: 1 }, usage: { increment: 1 } }
         });
-        await prisma.defaultAnalogy.update({
-            where: { id: DefaultAnalogyId },
-            data: { AnalogyId: best.id, onuse: true }
-        });
-
-        const existingUserAction = await prisma.userAnalogy.findFirst({
-            where: { UserId: userId, AnalogyId: best.id }
-        });
-
-        if (existingUserAction) {
-            await prisma.userAnalogy.update({
-                where: { id: existingUserAction.id },
-                data: { onuse: true }
+        let switchedToBest = true;
+        try {
+            await prisma.defaultAnalogy.update({
+                where: { id: DefaultAnalogyId },
+                data: { AnalogyId: best.id, onuse: true }
             });
-        } else {
-            await prisma.userAnalogy.create({
-                data: {
-                    UserId: userId,
-                    AnalogyId: best.id,
-                    status: 'neutral',
-                    onuse: true
-                }
-            });
+        } catch (error) {
+            if (!isUniqueConstraintError(error)) {
+                throw error;
+            }
+            switchedToBest = false;
         }
 
-        const savedBest = await prisma.analogy.findUnique({
-            where: { id: best.id },
-            include: { userActions: { where: { UserId: userId } } }
-        });
-        if (!savedBest) return { error: "Analogy not found" };
-        return savedBest;
+        if (switchedToBest) {
+            const existingUserAction = await prisma.userAnalogy.findFirst({
+                where: { UserId: userId, AnalogyId: best.id }
+            });
+
+            if (existingUserAction) {
+                await prisma.userAnalogy.update({
+                    where: { id: existingUserAction.id },
+                    data: { onuse: true }
+                });
+            } else {
+                await prisma.userAnalogy.create({
+                    data: {
+                        UserId: userId,
+                        AnalogyId: best.id,
+                        status: 'neutral',
+                        onuse: true
+                    }
+                });
+            }
+
+            const savedBest = await prisma.analogy.findUnique({
+                where: { id: best.id },
+                include: { userActions: { where: { UserId: userId } } }
+            });
+            if (!savedBest) return { error: "Analogy not found" };
+            return savedBest;
+        }
     }
 
     // 3. 🔥 NO reuse → generate directly
@@ -263,6 +281,10 @@ export async function ChangeAnalogy(DefaultAnalogyId: string, userId: string) {
     });
     if (!savedCreated) return { error: "Analogy not found" };
     return savedCreated;
+    } catch (error) {
+        console.error("ChangeAnalogy failed", error);
+        return { error: "Unable to regenerate analogy right now." };
+    }
 }
 
 /**

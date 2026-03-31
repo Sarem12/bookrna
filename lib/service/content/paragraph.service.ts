@@ -10,6 +10,27 @@ export async function GetParagraph(UserId: string, RealParagraphId: string) {
     const paragraphRecord = await GetBestParagraph(RealParagraphId, UserId);
 
     if (paragraphRecord) {
+        const existingUserAction = await prisma.userParagraph.findFirst({
+            where: { UserId, ParagraphId: paragraphRecord.id }
+        });
+
+        if (existingUserAction) {
+            await prisma.userParagraph.update({
+                where: { id: existingUserAction.id },
+                data: { onuse: true, skiped: false }
+            });
+        } else {
+            await prisma.userParagraph.create({
+                data: {
+                    UserId,
+                    ParagraphId: paragraphRecord.id,
+                    status: "neutral",
+                    onuse: true,
+                    skiped: false
+                }
+            });
+        }
+
         await prisma.paragraph.update({
             where: { id: paragraphRecord.id },
             data: { views: { increment: 1 } }
@@ -138,6 +159,28 @@ export async function ChangeParagraph(DefaultParagraphId: string, userId: string
             where: { id: DefaultParagraphId },
             data: { ParagraphId: best.id }
         });
+
+        const existingUserAction = await prisma.userParagraph.findFirst({
+            where: { UserId: userId, ParagraphId: best.id }
+        });
+
+        if (existingUserAction) {
+            await prisma.userParagraph.update({
+                where: { id: existingUserAction.id },
+                data: { onuse: true, skiped: false }
+            });
+        } else {
+            await prisma.userParagraph.create({
+                data: {
+                    UserId: userId,
+                    ParagraphId: best.id,
+                    status: "neutral",
+                    onuse: true,
+                    skiped: false
+                }
+            });
+        }
+
         return best;
     }
 
@@ -190,9 +233,21 @@ export async function LikeEventParagraph(UserId: string, ParagraphId: string) {
 
         if (!userAction) {
             // If it doesn't exist, create it so we can track the like
-            return await tx.userParagraph.create({
+            await tx.userParagraph.create({
                 data: { UserId, ParagraphId, status: 'liked', onuse: true }
             });
+
+            await tx.paragraph.update({
+                where: { id: ParagraphId },
+                data: { likes: { increment: 1 } }
+            });
+
+            await tx.tagRelatorParagraph.updateMany({
+                where: { ParagraphId },
+                data: { likes: { increment: 1 } }
+            });
+
+            return { success: true, newStatus: "liked" };
         }
 
         const isCurrentlyLiked = userAction.status === 'liked';
@@ -236,11 +291,32 @@ export async function LikeEventParagraph(UserId: string, ParagraphId: string) {
  */
 export async function DislikeEventParagraph(UserId: string, ParagraphId: string) {
     return await prisma.$transaction(async (tx) => {
-        const userAction = await tx.userParagraph.findFirst({
+        let userAction = await tx.userParagraph.findFirst({
             where: { UserId, ParagraphId }
         });
 
-        if (!userAction) return { error: "User record not found" };
+        if (!userAction) {
+            await tx.userParagraph.create({
+                data: {
+                    UserId,
+                    ParagraphId,
+                    status: "disliked",
+                    onuse: true
+                }
+            });
+
+            await tx.paragraph.update({
+                where: { id: ParagraphId },
+                data: { dislikes: { increment: 1 } }
+            });
+
+            await tx.tagRelatorParagraph.updateMany({
+                where: { ParagraphId },
+                data: { dislikes: { increment: 1 } }
+            });
+
+            return { success: true, newStatus: "disliked" };
+        }
 
         const isCurrentlyDisliked = userAction.status === 'disliked';
         const wasLiked = userAction.status === 'liked';
@@ -278,11 +354,33 @@ export async function DislikeEventParagraph(UserId: string, ParagraphId: string)
  */
 export async function FlagEventParagraph(UserId: string, ParagraphId: string) {
     return await prisma.$transaction(async (tx) => {
-        const userAction = await tx.userParagraph.findFirst({
+        let userAction = await tx.userParagraph.findFirst({
             where: { UserId, ParagraphId }
         });
 
-        if (!userAction) return { error: "User record not found" };
+        if (!userAction) {
+            await tx.userParagraph.create({
+                data: {
+                    UserId,
+                    ParagraphId,
+                    status: "neutral",
+                    onuse: true,
+                    flaged: true
+                }
+            });
+
+            await tx.paragraph.update({
+                where: { id: ParagraphId },
+                data: { flags: { increment: 1 } }
+            });
+
+            await tx.tagRelatorParagraph.updateMany({
+                where: { ParagraphId },
+                data: { flags: { increment: 1 } }
+            });
+
+            return { success: true, flagged: true };
+        }
 
         const newFlagState = !userAction.flaged;
         const change = newFlagState ? 1 : -1;

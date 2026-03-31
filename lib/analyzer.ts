@@ -79,13 +79,19 @@ export async function ChangeToBestAnalogy(defaultId: string, userId: string) {
         where: {
             OR: [{ RealParagraphId: slot.RealParagraphId }, { lessonId: slot.lessonId }],
             id: { not: slot.AnalogyId },
-            userActions: { none: { UserId: userId, skiped: true } }
+            userActions: { none: { UserId: userId, skiped: true } },
+            activeInSlots: {
+                is: null
+            }
         },
         include: { tagsAnalogy: true }
     });
-    const winner = pickWinner(candidates.map(item => ({ item, ...calculateScore(item, 'tagsAnalogy', userTags, rejTags) })));
-    if (winner) await prisma.defaultAnalogy.update({ where: { id: defaultId }, data: { AnalogyId: (winner as any).id } });
-    return winner;
+    return pickWinner(
+        candidates.map(item => ({
+            item,
+            ...calculateScore(item, 'tagsAnalogy', userTags, rejTags)
+        }))
+    );
 }
 
 // ==========================================

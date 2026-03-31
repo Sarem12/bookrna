@@ -1,42 +1,25 @@
-import { getAllBooks, getUserById } from "@/lib/service";
 import { BookCard } from "@/components/BookCard";
-import { cookies } from "next/headers";
-import { redirect } from "next/navigation";
+import { getAllBooks } from "@/lib/service";
 
 export default async function Home() {
-  try {
+  const books = await getAllBooks();
 
-   
-    
-
-    const [books] = await Promise.all([
-      getAllBooks(),
-     
-    ]);
-
-    // TYPE FIX: Guard clause ensures user is not null
-   
-
-    return (
-      <div className=" min-h-screen">
-        <main className="p-8">
-          <h2 className="text-2xl font-bold text-white mb-6">Your Textbooks</h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {books.map((book) => (
-              <BookCard
-                key={book.id}
-                subject={book.subject}
-                grade={book.grade}
-                imageUrl={book.imgUrl || "/placeholder-book.jpg"}
-                title={`${book.subject} - Grade ${book.grade}`}
-                id={book.id}
-              />
-            ))}
-          </div>
-        </main>
-      </div>
-    );
-  } catch (e: any) {
-
-  }
+  return (
+    <div className="min-h-[calc(100vh-4rem)] bg-[var(--background)]">
+      <main className="w-full px-2 py-4 sm:px-4 sm:py-5 lg:px-5 lg:py-6">
+        <section className="grid grid-cols-[repeat(auto-fill,minmax(320px,360px))] justify-start gap-5">
+          {books.map((book) => (
+            <BookCard
+              key={book.id}
+              subject={book.subject}
+              grade={book.grade}
+              imageUrl={book.imgUrl || ""}
+              title={`${book.subject} - Grade ${book.grade}`}
+              id={book.id}
+            />
+          ))}
+        </section>
+      </main>
+    </div>
+  );
 }

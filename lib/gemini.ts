@@ -71,7 +71,11 @@ const universalInterests = (await prisma.universalTag.findMany({
                 5. PHYSICAL STEPS: Use "part" for "apparatus," "small bags" for "vesicles," and "sending out" for "secretion." 
                 6. SCIENTIFIC NAMES: You MUST keep the core terms (e.g., Golgi apparatus) so the lesson remains accurate.
                 7. TONE: Write a direct, factual note. No "chill" or "mentor" personality.
-                8. FORMATTING: Do NOT add numbers (1., 2.) or bullets. Write flowing sentences.`;
+                8. NO SUMMERY: Do not add a summary at the end. Just the step-by-step explanation.
+                      - also do not summery the paparapgh simply only rewrite it in a more clear way with better flow and with the rules above.
+                9. FORMATTING: Do NOT add numbers (1., 2.) or bullets. Write flowing sentences.`;
+                console.log("passed");
+                
             break;
             
         case 'keyword':
@@ -168,11 +172,29 @@ export async function getTagsFromAI(userBio: string, existingTags: string[], att
             generationConfig: { responseMimeType: "application/json", temperature: 0.1 }
         });
 
-        const prompt = `Extract interests and properties of the user from: "${userBio}". Match them only to categories in: ${JSON.stringify(existingTags)}. Return a JSON string array.`;
+        const prompt = `
+        Extract the user's main interests and learning preference tags from this text:
+        "${userBio}"
+
+        EXISTING_TAGS:
+        ${JSON.stringify(existingTags)}
+
+        RULES:
+        - Prefer exact existing tags when they fit.
+        - If an important tag does not already exist, create a short new tag name with 1 to 3 words.
+        - Return only useful tags, no sentences.
+        - Return between 1 and 6 tags.
+        - Return JSON only.
+
+        OUTPUT:
+        ["tag one", "tag two"]
+        `;
 
         const result = await model.generateContent(prompt);
         const cleanJson = result.response.text().replace(/```json|```/g, "").trim();
-        return JSON.parse(cleanJson) as string[];
+        return (JSON.parse(cleanJson) as string[])
+            .map((tag) => String(tag).trim())
+            .filter(Boolean);
 
     } catch (e: any) {
         if (e.status === 429 || e.message?.includes("429")) {

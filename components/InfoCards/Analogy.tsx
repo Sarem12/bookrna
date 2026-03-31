@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import ReactMarkdown from "react-markdown";
-import { Lightbulb, MoreVertical, Copy, RefreshCw, Trash2, ThumbsUp, ThumbsDown, Flag, Eye, Repeat } from "lucide-react";
+import { Flag, Lightbulb, MoreVertical, RefreshCw, Trash2, ThumbsDown, ThumbsUp } from "lucide-react";
 import { Analogy as Analogytype, User, UserAnalogy } from "@prisma/client";
 import { authUtils } from "@/lib/localdata";
 
@@ -12,6 +12,19 @@ type AnalogyProps = {
   user?: User;
   text?: string;
 };
+
+function LoadingDots({ label }: { label: string }) {
+  return (
+    <div className="rounded-b-lg px-6 py-4 text-sm text-[var(--muted)]">
+      <div className="flex items-center gap-2">
+        <span>{label}</span>
+        <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-[var(--muted)]" />
+        <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-[var(--muted)] [animation-delay:120ms]" />
+        <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-[var(--muted)] [animation-delay:240ms]" />
+      </div>
+    </div>
+  );
+}
 
 export function Analogy({ analogy, text }: AnalogyProps) {
   const currentUserId = authUtils.getId();
@@ -35,11 +48,7 @@ export function Analogy({ analogy, text }: AnalogyProps) {
     setUserStatus(initialStatus);
     setIsFlagged(initialFlagged);
     setIsOnUse(initialOnUse);
-  }, [analogy]);
-
-  const updateStatus = (newStatus: "liked" | "disliked" | "neutral") => {
-    setUserStatus(newStatus);
-  };
+  }, [analogy, initialStatus, initialFlagged, initialOnUse]);
 
   const parseJsonResponse = async (response: Response) => {
     const text = await response.text();
@@ -55,6 +64,16 @@ export function Analogy({ analogy, text }: AnalogyProps) {
   const sendAction = async (action: "like" | "dislike" | "flag") => {
     if (!currentAnalogy?.id || !currentUserId) return null;
     setLoadingAction(true);
+    const previousStatus = userStatus;
+    const previousFlagged = isFlagged;
+
+    if (action === "like") {
+      setUserStatus((current) => (current === "liked" ? "neutral" : "liked"));
+    }
+
+    if (action === "dislike") {
+      setUserStatus((current) => (current === "disliked" ? "neutral" : "disliked"));
+    }
 
     try {
       const response = await fetch(`/api/analogy/${action}`, {
@@ -66,6 +85,8 @@ export function Analogy({ analogy, text }: AnalogyProps) {
       const result = await parseJsonResponse(response);
       if (!response.ok || !result || result?.error) {
         console.error(result?.error || "Analogy action failed");
+        setUserStatus(previousStatus);
+        setIsFlagged(previousFlagged);
         return null;
       }
 
@@ -76,10 +97,12 @@ export function Analogy({ analogy, text }: AnalogyProps) {
       }
 
       const newStatus = result.newStatus as "liked" | "disliked" | "neutral";
-      updateStatus(newStatus);
+      setUserStatus(newStatus);
       return result;
     } catch (error) {
       console.error("Analogy action error", error);
+      setUserStatus(previousStatus);
+      setIsFlagged(previousFlagged);
       return null;
     } finally {
       setLoadingAction(false);
@@ -90,7 +113,7 @@ export function Analogy({ analogy, text }: AnalogyProps) {
     if (!currentAnalogy?.defaultAnalogyId || !currentUserId) return;
     setShowMenu(false);
     setIsChanging(true);
-    setChangeStatus("Regenerating analogy...");
+    setChangeStatus(null);
 
     try {
       const response = await fetch("/api/analogy/change", {
@@ -101,8 +124,9 @@ export function Analogy({ analogy, text }: AnalogyProps) {
       const result = await parseJsonResponse(response);
 
       if (!response.ok || !result || result?.error) {
-        console.error(result?.error || "Change analogy failed");
-        setChangeStatus("Unable to regenerate");
+        const message = result?.error || "Unable to regenerate analogy right now.";
+        console.error(message);
+        setChangeStatus(message);
         return;
       }
 
@@ -110,10 +134,9 @@ export function Analogy({ analogy, text }: AnalogyProps) {
       setUserStatus(result.userActions?.[0]?.status ?? "neutral");
       setIsFlagged(result.userActions?.[0]?.flaged ?? false);
       setIsOnUse(result.userActions?.[0]?.onuse ?? true);
-      setChangeStatus("New version loaded");
     } catch (error) {
       console.error("Change analogy error", error);
-      setChangeStatus("Error regenerating");
+      setChangeStatus("Unable to regenerate analogy right now.");
     } finally {
       setIsChanging(false);
     }
@@ -149,15 +172,15 @@ export function Analogy({ analogy, text }: AnalogyProps) {
       const result = await response.json();
       if (!response.ok || result?.error) {
         console.error(result?.error || "Remove analogy failed");
-        setChangeStatus("Unable to remove analogy");
+        setChangeStatus("Unable to remove analogy.");
         return;
       }
 
       setIsOnUse(false);
-      setChangeStatus("Analogy removed from active slot.");
+      setChangeStatus(null);
     } catch (error) {
       console.error("Remove analogy error", error);
-      setChangeStatus("Error removing analogy");
+      setChangeStatus("Unable to remove analogy.");
     } finally {
       setLoadingAction(false);
     }
@@ -201,39 +224,35 @@ export function Analogy({ analogy, text }: AnalogyProps) {
         <div className="fixed inset-0 z-9998" onClick={() => setShowMenu(false)} />
         <div
           style={{ top: menuCoords.top, left: menuCoords.left }}
-          className="fixed z-9999 w-52 origin-top-right rounded-xl border border-neutral-700 bg-neutral-900 p-1.5 shadow-2xl ring-1 ring-neutral-800 animate-in fade-in zoom-in-95 duration-150"
+          className="fixed z-9999 w-52 origin-top-right rounded-xl border border-[var(--border)] bg-[var(--surface)] p-1.5 shadow-2xl"
         >
-          <div className="px-3 py-2 mb-1 text-[10px] font-bold text-neutral-500 uppercase tracking-widest">
+          <div className="mb-1 px-3 py-2 text-[10px] font-bold uppercase tracking-widest text-[var(--muted)]">
             Actions
           </div>
           <MenuOption
-            icon={<ThumbsUp size={14} className={userStatus === "liked" ? "fill-current text-emerald-300" : "text-neutral-300"} />}
+            icon={<ThumbsUp size={14} className={userStatus === "liked" ? "fill-current text-emerald-500" : "text-[var(--muted)]"} />}
             label={userStatus === "liked" ? "Remove Like" : "Like"}
             onClick={() => {
-              sendAction("like");
+              void sendAction("like");
               setShowMenu(false);
             }}
           />
           <MenuOption
-            icon={<ThumbsDown size={14} className={userStatus === "disliked" ? "fill-current text-rose-300" : "text-neutral-300"} />}
+            icon={<ThumbsDown size={14} className={userStatus === "disliked" ? "fill-current text-rose-500" : "text-[var(--muted)]"} />}
             label={userStatus === "disliked" ? "Remove Dislike" : "Dislike"}
             onClick={() => {
-              sendAction("dislike");
+              void sendAction("dislike");
               setShowMenu(false);
             }}
           />
+          <MenuOption icon={<Flag size={14} />} label={isFlagged ? "Flagged" : "Flag and regenerate"} onClick={handleFlagAndRegenerate} />
+          <MenuOption icon={<RefreshCw size={14} />} label="Regenerate" onClick={handleRegenerate} />
+          <div className="my-1 border-t border-[var(--border)]" />
           <MenuOption
-            icon={<Flag size={14} />}
-            label={isFlagged ? "Flagged" : "Flag and regenerate"}
-            onClick={handleFlagAndRegenerate}
-          />
-          <MenuOption icon={<RefreshCw size={14}/>} label="Regenerate" onClick={handleRegenerate} />
-          <div className="my-1 border-t border-neutral-800" />
-          <MenuOption 
-            icon={<Trash2 size={14} />} 
-            label="Remove Analogy" 
-            className="text-rose-400 hover:bg-rose-500 hover:text-rose-300"
-            onClick={handleRemove} 
+            icon={<Trash2 size={14} />}
+            label="Remove Analogy"
+            className="text-rose-500 hover:bg-[var(--surface-elevated)]"
+            onClick={handleRemove}
           />
         </div>
       </>,
@@ -244,52 +263,41 @@ export function Analogy({ analogy, text }: AnalogyProps) {
   if (!isOnUse && currentAnalogy?.id) return null;
 
   return (
-    <div className={`relative my-6 ml-4 w-fit min-w-[320px] max-w-[95%] rounded-lg border border-amber-500/30 shadow-xl backdrop-blur-md ${showMenu ? 'z-60' : 'z-10'}`}>
-      
-      {/* Header Bar */}
-      <div className="flex items-center rounded-t-lg border-b border-amber-500/20 bg-amber-500/20 px-4 py-2">
-        <Lightbulb className="h-4 w-4 text-amber-600" />
-        
-        <h4 className="flex-1 text-center text-[12px] font-medium tracking-[0.2em] text-amber-600 uppercase">
-          Analogy
-        </h4>
-        
+    <div className={`relative my-6 ml-4 w-fit min-w-[320px] max-w-[95%] rounded-lg border border-amber-500/25 bg-[var(--surface)] shadow-sm ${showMenu ? "z-60" : "z-10"}`}>
+      <div className="flex items-center rounded-t-lg border-b border-amber-500/20 bg-amber-500/10 px-4 py-2">
+        <Lightbulb className="h-4 w-4 text-amber-500" />
+        <h4 className="flex-1 text-center text-[12px] font-medium uppercase tracking-[0.2em] text-amber-500">Analogy</h4>
+
         <div className="relative">
-          <button 
+          <button
             ref={buttonRef}
             onClick={toggleMenu}
-            className="flex h-6 w-6 items-center justify-center rounded-full hover:bg-amber-500/30 transition-all text-amber-600 active:scale-90"
+            className="flex h-6 w-6 items-center justify-center rounded-full text-amber-500 transition-all hover:bg-amber-500/10 active:scale-90"
           >
             <MoreVertical className="h-4 w-4" />
           </button>
-
-          {/* THE OUTSIDE MENU - SWAPPED SLATE FOR NEUTRAL */}
           {renderMenuPortal()}
         </div>
       </div>
 
-      {/* Content Area (Solid dark panel) */}
-      <div className="rounded-b-lg px-6 py-4 text-[13px] leading-relaxed text-slate-200 ">
-        <ReactMarkdown>{content}</ReactMarkdown>
-        {changeStatus && (
-          <div className="mt-2 text-xs text-slate-400">{changeStatus}</div>
-        )}
-
-        {currentAnalogy && (
-          <div className="mt-4 text-[12px] text-slate-400">
-            {isFlagged && <div className="mb-2 text-amber-300">This analogy has been flagged.</div>}
-          </div>
-        )}
-      </div>
+      {isChanging ? (
+        <LoadingDots label="Regenerating analogy" />
+      ) : (
+        <div className="rounded-b-lg px-6 py-4 text-[13px] leading-relaxed text-[var(--foreground)]">
+          <ReactMarkdown>{content}</ReactMarkdown>
+          {changeStatus && <div className="mt-2 text-xs text-[var(--muted)]">{changeStatus}</div>}
+          {isFlagged && <div className="mt-4 text-[12px] text-amber-500">This analogy has been flagged.</div>}
+        </div>
+      )}
     </div>
   );
 }
 
-function MenuOption({ icon, label, onClick, className = "" }: { icon: any, label: string, onClick: () => void, className?: string }) {
+function MenuOption({ icon, label, onClick, className = "" }: { icon: any; label: string; onClick: () => void; className?: string }) {
   return (
-    <button 
+    <button
       onClick={onClick}
-      className={`group flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-[11px] font-medium text-neutral-300 hover:bg-neutral-800 hover:text-white transition-all active:bg-neutral-700 ${className}`}
+      className={`group flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-[11px] font-medium text-[var(--foreground)] transition-all hover:bg-[var(--surface-elevated)] ${className}`}
     >
       <span className="opacity-70 group-hover:opacity-100">{icon}</span>
       {label}
