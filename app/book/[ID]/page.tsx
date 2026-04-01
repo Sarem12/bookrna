@@ -5,6 +5,7 @@ import { useParams } from "next/navigation";
 import ReactMarkdown from "react-markdown";
 import { Analogy } from "@/components/InfoCards/Analogy";
 import { Paragraph } from "@/components/InfoCards/Paragraph";
+import { LoadingScreen } from "@/components/LoadingScreen";
 import { authUtils } from "@/lib/localdata";
 import type { BookContentLesson, BookContentPage } from "@/lib/service/book.service";
 
@@ -79,6 +80,18 @@ function getLessonDepthStyles(depth: number) {
   }
 }
 
+async function parseJsonResponse(response: Response) {
+  const text = await response.text();
+  if (!text) return null;
+
+  try {
+    return JSON.parse(text) as BookContentPage | { error: string };
+  } catch (error) {
+    console.error("Book page JSON parse failed:", text, error);
+    return { error: "Invalid server response" };
+  }
+}
+
 export default function BookPage() {
   const params = useParams();
   const bookId = params.ID as string;
@@ -120,10 +133,10 @@ export default function BookPage() {
         }
 
         const response = await fetch(`/api/book/${bookId}/content?${searchParams.toString()}`);
-        const result = (await response.json()) as BookContentPage | { error: string };
+        const result = await parseJsonResponse(response);
 
-        if (!response.ok || "error" in result) {
-          setError("error" in result ? result.error : "Failed to load book content");
+        if (!result || !response.ok || "error" in result) {
+          setError(result && "error" in result ? result.error : "Failed to load book content");
           return;
         }
 
@@ -180,7 +193,7 @@ export default function BookPage() {
   }, [fetchLessons, hasMore, loading, loadingMore, nextCursor]);
 
   if (loading && units.length === 0) {
-    return <div className="px-5 py-8 text-[var(--muted)] sm:px-6 lg:px-8">Loading book...</div>;
+    return <LoadingScreen fullPage label="Loading book" />;
   }
 
   if (error && units.length === 0) {

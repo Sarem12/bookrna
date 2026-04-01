@@ -262,6 +262,13 @@ export type BookContentPage = {
   hasMore: boolean;
 };
 
+export type BookUnitNavigationItem = {
+  id: string;
+  title: string;
+  startCursor: number;
+  lessonCount: number;
+};
+
 async function linkResolvedParagraphToUserSlot(userId: string, rp: { id: string; LessonId: string }, resolvedParagraphId: string) {
   const existingSlot = await prisma.defaultParagraph.findFirst({
     where: { UserId: userId, RealParagraphId: rp.id },
@@ -338,6 +345,30 @@ async function ensureRealParagraphDefaults(units: BookContentUnit[], userId: str
   );
 }
 
+async function incrementViewCounts(paragraphIds: string[], analogyIds: string[]) {
+  const uniqueParagraphIds = [...new Set(paragraphIds)];
+  const uniqueAnalogyIds = [...new Set(analogyIds)];
+
+  await Promise.all([
+    uniqueParagraphIds.length > 0
+      ? prisma.paragraph.updateMany({
+          where: {
+            id: { in: uniqueParagraphIds }
+          },
+          data: { views: { increment: 1 } }
+        })
+      : Promise.resolve(),
+    uniqueAnalogyIds.length > 0
+      ? prisma.analogy.updateMany({
+          where: {
+            id: { in: uniqueAnalogyIds }
+          },
+          data: { views: { increment: 1 } }
+        })
+      : Promise.resolve()
+  ]);
+}
+
 async function incrementLoadedContentViews(units: BookContentUnit[]) {
   const paragraphIds = units.flatMap((unit) =>
     unit.lessons.flatMap((lesson) =>
@@ -354,24 +385,7 @@ async function incrementLoadedContentViews(units: BookContentUnit[]) {
     ])
   );
 
-  const updates = [
-    ...paragraphIds.map((id) =>
-      prisma.paragraph.update({
-        where: { id },
-        data: { views: { increment: 1 } }
-      })
-    ),
-    ...analogyIds.map((id) =>
-      prisma.analogy.update({
-        where: { id },
-        data: { views: { increment: 1 } }
-      })
-    )
-  ];
-
-  if (updates.length > 0) {
-    await prisma.$transaction(updates);
-  }
+  await incrementViewCounts(paragraphIds, analogyIds);
 }
 
 async function ensureLessonParagraphDefaults(lessons: BookContentLesson[], userId: string) {
@@ -419,24 +433,7 @@ async function incrementLoadedLessonViews(lessons: BookContentLesson[]) {
     ...lesson.realParagraphs.flatMap((rp) => rp.analogies.map((analogy) => analogy.id))
   ]);
 
-  const updates = [
-    ...paragraphIds.map((id) =>
-      prisma.paragraph.update({
-        where: { id },
-        data: { views: { increment: 1 } }
-      })
-    ),
-    ...analogyIds.map((id) =>
-      prisma.analogy.update({
-        where: { id },
-        data: { views: { increment: 1 } }
-      })
-    )
-  ];
-
-  if (updates.length > 0) {
-    await prisma.$transaction(updates);
-  }
+  await incrementViewCounts(paragraphIds, analogyIds);
 }
 
 type LessonManifestItem = {
@@ -493,6 +490,46 @@ async function getBookLessonManifest(bookId: string) {
   });
 
   return units.flatMap((unit) => flattenLessonTree(unit.lessons));
+}
+
+export async function getBookUnitNavigation(bookId: string): Promise<BookUnitNavigationItem[]> {
+  const units = await prisma.unit.findMany({
+    where: { BookId: bookId },
+    orderBy: { id: "asc" },
+    select: {
+      id: true,
+      title: true,
+      lessons: {
+        select: {
+          id: true,
+          unitId: true,
+          ParentLessonId: true,
+          index: true
+        }
+      }
+    }
+  });
+
+  const manifest = units.flatMap((unit) => flattenLessonTree(unit.lessons));
+  const firstCursorByUnit = new Map<string, number>();
+  const lessonCountByUnit = new Map<string, number>();
+
+  manifest.forEach((item, index) => {
+    if (!firstCursorByUnit.has(item.unitId)) {
+      firstCursorByUnit.set(item.unitId, index);
+    }
+
+    lessonCountByUnit.set(item.unitId, (lessonCountByUnit.get(item.unitId) ?? 0) + 1);
+  });
+
+  return units
+    .filter((unit) => firstCursorByUnit.has(unit.id))
+    .map((unit) => ({
+      id: unit.id,
+      title: unit.title,
+      startCursor: firstCursorByUnit.get(unit.id) ?? 0,
+      lessonCount: lessonCountByUnit.get(unit.id) ?? 0
+    }));
 }
 
 export async function getBookContentPage(
