@@ -205,7 +205,7 @@ export default function BookPage() {
   }
 
   return (
-    <div className="min-h-[calc(100vh-4rem)] bg-[var(--background)]">
+    <div className="min-h-[calc(100vh-4rem)] bg-[var(--background)]v px-50">
       <div className="mx-auto w-full max-w-7xl px-4 py-5 sm:px-6 sm:py-6 lg:px-8 lg:py-8">
         <section className="mb-8 rounded-[28px] border border-[var(--border)] bg-[var(--surface)] px-6 py-6 sm:px-8">
           <h1 className="font-ui text-3xl text-[var(--foreground)] sm:text-4xl">
